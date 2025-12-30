@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Palermo AI Multiplayer</title>
+    <style>
+        body { background: #0a0a0a; color: #d4d4d4; font-family: 'Courier New', monospace; text-align: center; margin: 0; padding: 20px; }
+        .screen { display: none; flex-direction: column; align-items: center; }
+        .active { display: flex; }
+        input, button { padding: 12px; margin: 10px; border-radius: 5px; border: 1px solid #444; width: 80%; max-width: 300px; }
+        button { background: #600; color: white; cursor: pointer; font-weight: bold; }
+        .card { width: 200px; height: 300px; background: #1a1a1a; border: 2px solid #444; display: flex; align-items: center; justify-content: center; margin: 20px auto; border-radius: 10px; cursor: pointer; }
+        #narrator-box { font-style: italic; color: #888; margin: 20px; padding: 15px; border-left: 3px solid #600; background: #111; }
+    </style>
+</head>
+<body>
+
+    <div id="screen-login" class="screen active">
+        <h1>ΠΑΛΕΡΜΟ</h1>
+        <input type="text" id="room-id" placeholder="Κωδικός Δωματίου (π.χ. 1234)">
+        <input type="text" id="user-name" placeholder="Το όνομά σου">
+        <button id="btn-join">ΕΙΣΟΔΟΣ ΣΤΟ ΔΩΜΑΤΙΟ</button>
+    </div>
+
+    <div id="screen-lobby" class="screen">
+        <h2>Αναμονή παικτών...</h2>
+        <ul id="player-list"></ul>
+        <button id="btn-start-game" style="display:none;">ΕΝΑΡΞΗ (ADMIN)</button>
+    </div>
+
+    <div id="screen-game" class="screen">
+        <h2 id="display-name"></h2>
+        <div class="card" id="role-card" onclick="revealRole()">
+            <span id="role-text">Πάτα για αποκάλυψη</span>
+        </div>
+        <div id="narrator-box">Περιμένοντας τον Αφηγητή...</div>
+        <div id="actions-area"></div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, set, onValue, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        // 1. CONFIGURATION
+        const firebaseConfig = {
+            apiKey: "ΣΥΜΠΛΗΡΩΣΕ_ΤΟ_ΔΙΚΟ_ΣΟΥ",
+            authDomain: "ΤΟ-PROJECT-ΣΟΥ.firebaseapp.com",
+            databaseURL: "https://ΤΟ-PROJECT-ΣΟΥ.firebasedatabase.app",
+            projectId: "ΤΟ-PROJECT-ΣΟΥ",
+            storageBucket: "ΤΟ-PROJECT-ΣΟΥ.appspot.com",
+            messagingSenderId: "...",
+            appId: "..."
+        };
+        const GEMINI_API_KEY = "ΣΥΜΠΛΗΡΩΣΕ_ΤΟ_ΔΙΚΟ_ΣΟΥ";
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        let myName = "";
+        let myRoom = "";
+        let isHost = false;
+
+        // 2. JOIN ROOM
+        document.getElementById('btn-join').onclick = () => {
+            myRoom = document.getElementById('room-id').value;
+            myName = document.getElementById('user-name').value;
+            if(!myRoom || !myName) return alert("Συμπλήρωσε τα στοιχεία!");
+
+            const playerRef = ref(db, `rooms/${myRoom}/players/${myName}`);
+            set(playerRef, { role: "Pending", status: "alive" });
+
+            document.getElementById('screen-login').classList.remove('active');
+            document.getElementById('screen-lobby').classList.add('active');
+            listenToRoom();
+        };
+
+        // 3. LISTEN TO ROOM CHANGES
+        function listenToRoom() {
+            onValue(ref(db, `rooms/${myRoom}`), (snapshot) => {
+                const data = snapshot.val();
+                if(!data) return;
+
+                // Update Player List
+                const list = document.getElementById('player-list');
+                list.innerHTML = Object.keys(data.players).map(p => `<li>${p}</li>`).join('');
+
+                // Show Start Button for the first player (Host)
+                if(Object.keys(data.players)[0] === myName) {
+                    isHost = true;
+                    document.getElementById('btn-start-game').style.display = "block";
+                }
+
+                // If Game Started
+                if(data.phase === "ingame") {
+                    document.getElementById('screen-lobby').classList.remove('active');
+                    document.getElementById('screen-game').classList.add('active');
+                    document.getElementById('display-name').innerText = myName;
+                    document.getElementById('role-text').dataset.role = data.players[myName].role;
+                    document.getElementById('narrator-box').innerText = data.narratorText || "Η νύχτα ξεκινά...";
+                }
+            });
+        }
+
+        // 4. START GAME (HOST ONLY)
+        document.getElementById('btn-start-game').onclick = async () => {
+            const playersRef = ref(db, `rooms/${myRoom}/players`);
+            onValue(playersRef, async (snapshot) => {
+                const players = snapshot.val();
+                const names = Object.keys(players);
+                const roles = ["Δολοφόνος", "Ρουφιάνος", "Πολίτης", "Πολίτης", "Πολίτης"].slice(0, names.length);
+                roles.sort(() => Math.random() - 0.5);
+
+                const updates = {};
+                names.forEach((name, i) => {
+                    updates[`rooms/${myRoom}/players/${name}/role`] = roles[i] || "Πολίτης";
+                });
+                updates[`rooms/${myRoom}/phase`] = "ingame";
+                
+                // Gemini Intro
+                const intro = await getAINarration("Πες μια noir εισαγωγή για την έναρξη του παιχνιδιού στο Παλέρμο.");
+                updates[`rooms/${myRoom}/narratorText`] = intro;
+
+                update(ref(db), updates);
+            }, { onlyOnce: true });
+        };
+
+        // 5. GEMINI API CALL
+        async function getAINarration(prompt) {
+            try {
+                const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+                    method: "POST",
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                });
+                const json = await resp.json();
+                return json.candidates[0].content.parts[0].text;
+            } catch (e) { return "Η νύχτα έπεσε βαρύθυμη στο Παλέρμο..."; }
+        }
+
+        // UI INTERACTION
+        window.revealRole = () => {
+            const el = document.getElementById('role-text');
+            el.innerText = el.dataset.role;
+        };
+
+    </script>
+</body>
+</html>
