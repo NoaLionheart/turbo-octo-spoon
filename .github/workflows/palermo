@@ -44,13 +44,14 @@
 
         // 1. CONFIGURATION
         const firebaseConfig = {
-            apiKey: "ΣΥΜΠΛΗΡΩΣΕ_ΤΟ_ΔΙΚΟ_ΣΟΥ",
-            authDomain: "ΤΟ-PROJECT-ΣΟΥ.firebaseapp.com",
-            databaseURL: "https://ΤΟ-PROJECT-ΣΟΥ.firebasedatabase.app",
-            projectId: "ΤΟ-PROJECT-ΣΟΥ",
-            storageBucket: "ΤΟ-PROJECT-ΣΟΥ.appspot.com",
-            messagingSenderId: "...",
-            appId: "..."
+            apiKey: AIzaSyA15c1AX4WZPglvNz2EzFD-uPyM6ueORug",
+            authDomain: "palermo-701cd.firebaseapp.com",
+            databaseURL: "https://palermo-701cd-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "palermo-701cd",
+            storageBucket: "palermo-701cd.firebasestorage.app",
+            messagingSenderId: "435680346704",
+            appId: "1:435680346704:web:4e9571cee83d6f59594755",
+            measurementId: "G-W9KEK8XSY4"
         };
         const GEMINI_API_KEY = "ΣΥΜΠΛΗΡΩΣΕ_ΤΟ_ΔΙΚΟ_ΣΟΥ";
 
